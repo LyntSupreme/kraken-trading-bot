@@ -1,6 +1,5 @@
 streamlit
 ccxt
-plotly
 pandas
-requests
 pandas-ta
+plotly
