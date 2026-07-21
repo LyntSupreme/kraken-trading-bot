@@ -54,14 +54,14 @@ if df is not None and not df.empty:
     st.subheader("🧠 AI Analysis & Market Microstructure (Semáforos)")
     
     c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(f"**Trend Score:** `{detalle_scores['Trend']}/20` " + ("🟢" if detalle_scores['Trend'] >= 15 else "🟡"))
-    c2.markdown(f"**Volume Score:** `{detalle_scores['Volume']}/20` " + ("🟢" if detalle_scores['Volume'] >= 15 else "🟡"))
-    c3.markdown(f"**Liquidity Score:** `{detalle_scores['Liquidity']}/20` " + ("🟢" if detalle_scores['Liquidity'] >= 15 else "🔴"))
-    c4.markdown(f"**Momentum (RSI):** `{detalle_scores['Momentum']}/20` " + ("🟢" if detalle_scores['Momentum'] >= 15 else "🟡"))
+    c1.markdown(f"**Trend Score:** `{detalle_scores.get('Trend', 0)}/20` " + ("🟢" if detalle_scores.get('Trend', 0) >= 15 else "🟡"))
+    c2.markdown(f"**Volume Score:** `{detalle_scores.get('Volume', 0)}/20` " + ("🟢" if detalle_scores.get('Volume', 0) >= 15 else "🟡"))
+    c3.markdown(f"**Liquidity Score:** `{detalle_scores.get('Liquidity', 0)}/20` " + ("🟢" if detalle_scores.get('Liquidity', 0) >= 15 else "🔴"))
+    c4.markdown(f"**Momentum (RSI):** `{detalle_scores.get('Momentum', 0)}/20` " + ("🟢" if detalle_scores.get('Momentum', 0) >= 15 else "🟡"))
 
     c5, c6, c7, c8 = st.columns(4)
-    c5.markdown(f"**Order Book Imbalance:** `{detalle_scores['OrderBook']}/20` " + ("🟢" if detalle_scores['OrderBook'] >= 15 else "🔴"))
-    c6.markdown(f"**News Sentiment (Base):** `{detalle_scores['News']}/20` 🟢")
+    c5.markdown(f"**Order Book Imbalance:** `{detalle_scores.get('OrderBook', 0)}/20` " + ("🟢" if detalle_scores.get('OrderBook', 0) >= 15 else "🔴"))
+    c6.markdown(f"**News Sentiment (Base):** `{detalle_scores.get('News', 15)}/20` 🟢")
     c7.markdown(f"**Volatility Regime:** `Estable` 🟢")
     c8.markdown(f"**Whale Accumulation:** `Neutral` 🟡")
 
@@ -91,13 +91,12 @@ if df is not None and not df.empty:
 
     if resultado_riesgo:
         r1, r2, r3 = st.columns(3)
-        r1.metric("Riesgo Asignado", f"${resultado_riesgo['riesgo_dinero']:,.2f}")
-        r2.metric("Tamaño de Orden", f"{resultado_riesgo['tamaño_btc']:.2f} Unidades")
-        r3.metric("Capital Involucrado", f"${resultado_riesgo['capital_involucrado']:,.2f}")
+        r1.metric("Riesgo Asignado", f"${resultado_riesgo.get('riesgo_dinero', 0.0):,.2f}")
+        r2.metric("Tamaño de Orden", f"{resultado_riesgo.get('tamaño_btc', 0.0):.2f} Unidades")
+        r3.metric("Capital Involucrado", f"${resultado_riesgo.get('capital_involucrado', 0.0):,.2f}")
 
         st.markdown("---")
         
-        # Umbral estricto para operar (ej: mínimo 85 puntos / 70% de probabilidad)
         UMBRAL_MINIMO_PUNTUACION = 85 
 
         if score_total >= UMBRAL_MINIMO_PUNTUACION:
@@ -105,11 +104,9 @@ if df is not None and not df.empty:
         else:
             st.warning(f"⚠️ **Sin Ventaja Suficiente ({score_total}/120 pts).** Se requiere un mínimo de {UMBRAL_MINIMO_PUNTUACION} puntos para operar. El bot prioriza la preservación de capital.")
 
-        # Interruptor manual condicionado al Risk Engine y Scoring
         if 'ejecutar_trade' not in st.session_state:
             st.session_state.ejecutar_trade = False
 
-        # Validaciones del Risk Engine antes de dejar pulsar el botón
         limite_trades_alcanzado = st.session_state.trades_realizados_hoy >= 3
         limite_perdida_alcanzado = st.session_state.perdida_acumulada_hoy >= 2.00
 
@@ -129,11 +126,14 @@ if df is not None and not df.empty:
                         tamaño_btc=resultado_riesgo['tamaño_btc']
                     )
                     
-                    if not respuesta_orden or "error" in respuesta_orden:
-                        err = respuesta_orden.get('error', 'Desconocido') if respuesta_orden else 'Vacía'
-                        st.error(f"Kraken rechazó la orden: {err}")
+                    # Verificamos de forma segura la respuesta de la orden
+                    if not respuesta_orden or not isinstance(respuesta_orden, dict):
+                        st.error("Kraken devolvió una respuesta vacía o no válida.")
+                    elif "error" in respuesta_orden and respuesta_orden["error"]:
+                        st.error(f"Kraken rechazó la orden: {respuesta_orden['error']}")
                     else:
-                        st.success(f"🎉 ¡Orden ejecutada con éxito! ID: {respuesta_orden.get('id', 'N/A')}")
+                        orden_id = respuesta_orden.get('id', 'N/A')
+                        st.success(f"🎉 ¡Orden ejecutada con éxito! ID: {orden_id}")
                         st.session_state.trades_realizados_hoy += 1
                     
                     st.session_state.ejecutar_trade = False
