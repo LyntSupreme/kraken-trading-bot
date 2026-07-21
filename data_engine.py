@@ -1,11 +1,10 @@
 import ccxt
 import pandas as pd
-import pandas_ta as ta
 
 def obtener_datos(simbolo='BTC/USD', timeframe='1h', limite=300):
     """
     Se conecta a Kraken y descarga el historial de precios para cualquier par
-    calculando automáticamente la EMA 200.
+    calculando automáticamente la EMA 200 de forma nativa.
     """
     try:
         exchange = ccxt.kraken()
@@ -23,8 +22,8 @@ def obtener_datos(simbolo='BTC/USD', timeframe='1h', limite=300):
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         
-        # Calcular la EMA 200 usando pandas_ta
-        df['EMA_200'] = ta.ema(df['close'], length=200)
+        # Calcular la EMA 200 de forma nativa (sin librerías externas)
+        df['EMA_200'] = df['close'].ewm(span=200, adjust=False).mean()
         
         # Limpiar valores nulos iniciales de la EMA
         df.dropna(subset=['EMA_200'], inplace=True)
