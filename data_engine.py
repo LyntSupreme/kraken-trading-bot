@@ -1,36 +1,36 @@
 import ccxt
 import pandas as pd
+import pandas_ta as ta
 
-def obtener_datos(simbolo='BTC/USD', timeframe='1h'):
+def obtener_datos(simbolo='BTC/USD', timeframe='1h', limite=300):
     """
-    Conecta con Kraken y descarga datos históricos recientes 
-    para calcular la EMA de forma nativa.
+    Se conecta a Kraken y descarga el historial de precios para cualquier par
+    calculando automáticamente la EMA 200.
     """
     try:
-        # Inicializamos el exchange Kraken (modo público)
         exchange = ccxt.kraken()
+        exchange.load_markets()
         
-        # Descargamos los últimos 250 periodos (necesarios para la EMA 200)
-        bars = exchange.fetch_ohlcv(simbolo, timeframe=timeframe, limit=250)
+        # Verificar si el símbolo existe en Kraken
+        if simbolo not in exchange.symbols:
+            print(f"El símbolo {simbolo} no está disponible en Kraken.")
+            return None
+
+        # Descargar velas (OHLCV)
+        ohlcv = exchange.fetch_ohlcv(simbolo, timeframe=timeframe, limit=limite)
         
-        # Convertimos la lista a un DataFrame de Pandas (tabla estructurada)
-        df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        
-        # Convertimos el timestamp a formato de fecha legible
+        # Convertir a DataFrame de Pandas
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         
-        # Calculamos la EMA 200 de forma nativa con Pandas
-        df['EMA_200'] = df['close'].ewm(span=200, adjust=False).mean()
+        # Calcular la EMA 200 usando pandas_ta
+        df['EMA_200'] = ta.ema(df['close'], length=200)
+        
+        # Limpiar valores nulos iniciales de la EMA
+        df.dropna(subset=['EMA_200'], inplace=True)
         
         return df
 
     except Exception as e:
-        print(f"Error al conectar con Kraken: {e}")
+        print(f"Error al obtener datos de Kraken para {simbolo}: {e}")
         return None
-
-if __name__ == "__main__":
-    print("Probando descarga de datos de Kraken...")
-    df_prueba = obtener_datos()
-    if df_prueba is not None:
-        print("¡Datos descargados con éxito!")
-        print(df_prueba.tail(3))
