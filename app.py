@@ -107,7 +107,7 @@ if df is not None and not df.empty:
 else:
     st.error(f"No se pudieron cargar los datos de Kraken para {simbolo_seleccionado}.")
 
-# --- NUEVA SECCIÓN: REPORTES Y BALANCE DIRECTO DE KRAKEN ---
+# --- REPORTES Y BALANCE DIRECTO DE KRAKEN ---
 st.markdown("---")
 st.subheader("📊 Reportes y Estado de Operaciones en Kraken")
 
@@ -120,7 +120,6 @@ if st.button("📥 Consultar Balance y Órdenes Abiertas en Kraken"):
                 balance = exchange_conn.fetch_balance()
                 st.write("### 💰 Balance de la Cuenta")
                 
-                # Filtrar solo monedas con balance mayor a 0
                 total_free = balance.get('free', {})
                 monedas_con_fondos = {k: v for k, v in total_free.items() if v > 0}
                 
@@ -129,14 +128,23 @@ if st.button("📥 Consultar Balance y Órdenes Abiertas en Kraken"):
                 else:
                     st.info("No se encontraron balances positivos disponibles.")
 
-                # Consultar órdenes recientes / historial
-                st.write("### 📋 Historial Reciente de Órdenes")
-                ordenes = exchange_conn.fetch_orders(simbolo_seleccionado, limit=5)
-                if ordenes:
-                    for o in ordenes:
-                        st.text(f"ID: {o.get('id')} | Tipo: {o.get('side')} | Precio: {o.get('price')} | Estado: {o.get('status')}")
+                # Consultar órdenes abiertas actuales
+                st.write("### 📋 Órdenes Abiertas Actualmente")
+                ordenes_abiertas = exchange_conn.fetch_open_orders(simbolo_seleccionado)
+                if ordenes_abiertas:
+                    for o in ordenes_abiertas:
+                        st.text(f"ID: {o.get('id')} | Lado: {o.get('side')} | Precio: {o.get('price')} | Estado: {o.get('status')}")
                 else:
-                    st.info("No hay registros recientes de órdenes para este par.")
+                    st.info("No hay órdenes abiertas en este momento para este par.")
+
+                # Consultar historial de órdenes cerradas
+                st.write("### 📜 Historial de Órdenes Cerradas")
+                ordenes_cerradas = exchange_conn.fetch_closed_orders(simbolo_seleccionado, limit=5)
+                if ordenes_cerradas:
+                    for o in ordenes_cerradas:
+                        st.text(f"ID: {o.get('id')} | Lado: {o.get('side')} | Precio Ejecutado: {o.get('price')} | Estado: {o.get('status')}")
+                else:
+                    st.info("No hay registros recientes de órdenes cerradas para este par.")
 
             except Exception as e:
                 st.error(f"No se pudo obtener el reporte de Kraken: {e}")
