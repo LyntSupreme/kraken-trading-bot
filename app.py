@@ -28,11 +28,11 @@ if st.button("🔄 Actualizar Datos del Mercado"):
 with st.spinner(f"Conectando con Kraken y descargando datos para {simbolo_seleccionado}..."):
     df = obtener_datos(simbolo=simbolo_seleccionado, timeframe='1h')
 
-if df is not None:
-    precio_actual = df['close'].iloc[-1]
-    ema_200 = df['EMA_200'].iloc[-1]
+if df is not None and not df.empty:
+    precio_actual = float(df['close'].iloc[-1])
+    ema_200 = float(df['EMA_200'].iloc[-1])
     
-    # Métricas visuales arriba
+    # Métricas visuales arriba protegidas contra nulos
     col1, col2, col3 = st.columns(3)
     col1.metric(f"Precio Actual ({simbolo_seleccionado})", f"${precio_actual:,.4f}")
     col2.metric("EMA 200 (Tendencia)", f"${ema_200:,.4f}")
@@ -44,7 +44,7 @@ if df is not None:
 
     st.markdown("---")
 
-    # 2. Gráfico interactivo de Velas y EMA usando Plotly
+    # 2. Gráfico interactivo
     st.subheader(f"Gráfico de Precios y Tendencia ({simbolo_seleccionado})")
     
     fig = go.Figure()
@@ -69,10 +69,9 @@ if df is not None:
         porcentaje_riesgo = st.slider("Porcentaje de Riesgo por Trade", min_value=0.001, max_value=0.01, value=0.01, step=0.001, format="%.3f")
     
     with col_b:
-        stop_loss_sugerido = precio_actual * 0.98  # 2% por defecto
+        stop_loss_sugerido = precio_actual * 0.98 
         precio_sl_personalizado = st.number_input("Precio de Stop Loss", value=float(stop_loss_sugerido), step=0.01)
 
-    # Calcular riesgo con los valores de la interfaz
     resultado_riesgo = calcular_tamano_posicion(
         capital_total=capital_cuenta,
         porcentaje_riesgo=porcentaje_riesgo,
@@ -100,10 +99,12 @@ if df is not None:
                 tamaño_btc=resultado_riesgo['tamaño_btc']
             )
             
-            if "error" in respuesta_orden:
-                st.error(f"Error al ejecutar la orden autónoma: {respuesta_orden['error']}")
+            if not respuesta_orden or "error" in respuesta_orden:
+                error_msg = respuesta_orden.get('error', 'Error desconocido al procesar la orden') if respuesta_orden else 'Respuesta vacía del exchange'
+                st.error(f"Error al ejecutar la orden autónoma: {error_msg}")
             else:
-                st.info(f"¡Orden autónoma ejecutada con éxito para {simbolo_seleccionado}! ID: {respuesta_orden['id']}")
+                id_orden = respuesta_orden.get('id', 'N/A')
+                st.info(f"¡Orden autónoma ejecutada con éxito para {simbolo_seleccionado}! ID: {id_orden}")
         else:
             st.warning(f"🛡️ **Piloto Automático en Espera:** {simbolo_seleccionado} está en tendencia bajista. El bot no abrirá operaciones.")
 
