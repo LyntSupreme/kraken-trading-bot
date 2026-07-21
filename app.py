@@ -3,20 +3,30 @@ import streamlit as st
 import plotly.graph_objects as go
 from data_engine import obtener_datos
 from risk_manager import calcular_tamano_posicion
+from execution_engine import ejecutar_orden_real
 
 # Configuración de la página web
-st.set_page_config(page_title="Kraken Bot Dashboard", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="Kraken Multi-Currency Bot", page_icon="🤖", layout="wide")
 
-st.title("🤖 Kraken Trading Bot - Panel de Control (Paper Trading)")
-st.markdown("Monitoreo en tiempo real de la estrategia Dual-EMA y gestión de riesgo automatizada.")
+st.title("🤖 Kraken Multi-Currency Trading Bot - Panel Autónomo")
+st.markdown("Monitoreo y ejecución automática de estrategia Dual-EMA en múltiples pares.")
+
+# --- BARRA LATERAL: SELECCIÓN DE DIVISAS ---
+st.sidebar.header("⚙️ Configuración de Pares")
+pares_disponibles = [
+    'BTC/USD', 'ETH/USD', 'SOL/USD', 'ADA/USD', 
+    'XRP/USD', 'DOT/USD', 'MATIC/USD', 'LINK/USD', 
+    'AVAX/USD', 'LTC/USD', 'BCH/USD', 'UNI/USD'
+]
+simbolo_seleccionado = st.sidebar.selectbox("Selecciona la divisa a operar:", pares_disponibles)
 
 # Botón para actualizar datos manualmente
 if st.button("🔄 Actualizar Datos del Mercado"):
     st.rerun()
 
-# 1. Obtener datos del motor
-with st.spinner("Conectando con Kraken y descargando datos..."):
-    df = obtener_datos(simbolo='BTC/USD', timeframe='1h')
+# 1. Obtener datos del motor para el par seleccionado
+with st.spinner(f"Conectando con Kraken y descargando datos para {simbolo_seleccionado}..."):
+    df = obtener_datos(simbolo=simbolo_seleccionado, timeframe='1h')
 
 if df is not None:
     precio_actual = df['close'].iloc[-1]
@@ -24,8 +34,8 @@ if df is not None:
     
     # Métricas visuales arriba
     col1, col2, col3 = st.columns(3)
-    col1.metric("Precio Actual (BTC/USD)", f"${precio_actual:,.2f}")
-    col2.metric("EMA 200 (Tendencia)", f"${ema_200:,.2f}")
+    col1.metric(f"Precio Actual ({simbolo_seleccionado})", f"${precio_actual:,.4f}")
+    col2.metric("EMA 200 (Tendencia)", f"${ema_200:,.4f}")
     
     if precio_actual > ema_200:
         col3.metric("Estado del Mercado", "TENDENCIA ALCISTA", "LONG HABILITADO", delta_color="normal")
@@ -35,12 +45,10 @@ if df is not None:
     st.markdown("---")
 
     # 2. Gráfico interactivo de Velas y EMA usando Plotly
-    st.subheader("Gráfico de Precios y Tendencia (BTC/USD)")
+    st.subheader(f"Gráfico de Precios y Tendencia ({simbolo_seleccionado})")
     
     fig = go.Figure()
-    # Línea de precios de cierre
-    fig.add_trace(go.Scatter(x=df['timestamp'], y=df['close'], mode='lines', name='Precio BTC', line=dict(color='orange', width=2)))
-    # Línea de la EMA 200
+    fig.add_trace(go.Scatter(x=df['timestamp'], y=df['close'], mode='lines', name=f'Precio {simbolo_seleccionado}', line=dict(color='orange', width=2)))
     fig.add_trace(go.Scatter(x=df['timestamp'], y=df['EMA_200'], mode='lines', name='EMA 200', line=dict(color='blue', width=2, dash='dash')))
     
     fig.update_layout(
@@ -51,9 +59,9 @@ if df is not None:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # 3. Panel lateral de Gestión de Riesgo y Plan de Orden
+    # 3. Panel de Gestión de Riesgo y Piloto Automático
     st.markdown("---")
-    st.subheader("🛡️ Simulador y Plan de Gestión de Riesgo (1% Máximo)")
+    st.subheader("🛡️ Gestión de Riesgo y Piloto Automático")
     
     col_a, col_b = st.columns(2)
     with col_a:
@@ -62,7 +70,7 @@ if df is not None:
     
     with col_b:
         stop_loss_sugerido = precio_actual * 0.98  # 2% por defecto
-        precio_sl_personalizado = st.number_input("Precio de Stop Loss", value=float(stop_loss_sugerido), step=10.0)
+        precio_sl_personalizado = st.number_input("Precio de Stop Loss", value=float(stop_loss_sugerido), step=0.01)
 
     # Calcular riesgo con los valores de la interfaz
     resultado_riesgo = calcular_tamano_posicion(
@@ -76,22 +84,41 @@ if df is not None:
         st.success("Plan de orden calculado de forma segura bajo los límites establecidos.")
         r1, r2, r3 = st.columns(3)
         r1.metric("Riesgo Máximo en Dinero", f"${resultado_riesgo['riesgo_dinero']:,.2f}")
-        r2.metric("Tamaño de Posición", f"{resultado_riesgo['tamaño_btc']:.5f} BTC")
+        r2.metric("Tamaño de Posición", f"{resultado_riesgo['tamaño_btc']:.5f} Unidades")
         r3.metric("Capital Involucrado en Orden", f"${resultado_riesgo['capital_involucrado']:,.2f}")
 
+        st.markdown("---")
+        st.subheader("⚡ Estado del Piloto Automático Multi-Divisa")
+
+        # LÓGICA DE EJECUCIÓN AUTÓNOMA
+        if precio_actual > ema_200:
+            st.success(f"🤖 **Piloto Automático Activo:** {simbolo_seleccionado} en Tendencia Alcista. Enviando orden real a Kraken...")
+            
+            respuesta_orden = ejecutar_orden_real(
+                simbolo=simbolo_seleccionado,
+                tipo_operacion="BUY",
+                tamaño_btc=resultado_riesgo['tamaño_btc']
+            )
+            
+            if "error" in respuesta_orden:
+                st.error(f"Error al ejecutar la orden autónoma: {respuesta_orden['error']}")
+            else:
+                st.info(f"¡Orden autónoma ejecutada con éxito para {simbolo_seleccionado}! ID: {respuesta_orden['id']}")
+        else:
+            st.warning(f"🛡️ **Piloto Automático en Espera:** {simbolo_seleccionado} está en tendencia bajista. El bot no abrirá operaciones.")
+
 else:
-    st.error("No se pudieron cargar los datos de Kraken. Verifica tu conexión.")
+    st.error(f"No se pudieron cargar los datos de Kraken para {simbolo_seleccionado}. Verifica tu conexión.")
 
 # 4. Bucle de actualización automática en segundo plano (cada 60 segundos)
 st.markdown("---")
-st.write("🔄 Bot operando con ciclo automático...")
+st.write(f"🔄 Bot operando de forma autónoma sobre {simbolo_seleccionado}...")
 
 TIEMPO_ESPERA = 60  
 placeholder = st.empty()
 
 for segundos_restantes in range(TIEMPO_ESPERA, 0, -1):
-    placeholder.text(f"Próxima actualización de mercado en {segundos_restantes} segundos...")
+    placeholder.text(f"Próxima revisión de mercado en {segundos_restantes} segundos...")
     time.sleep(1)
 
-# Reinicia el script automáticamente al terminar el conteo
 st.rerun()
