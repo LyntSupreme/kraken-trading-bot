@@ -1,3 +1,4 @@
+import time
 import streamlit as st
 import plotly.graph_objects as go
 from data_engine import obtener_datos
@@ -48,7 +49,7 @@ if df is not None:
         template="plotly_dark",
         height=500
     )
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, use_container_width=True)
 
     # 3. Panel lateral de Gestión de Riesgo y Plan de Orden
     st.markdown("---")
@@ -80,3 +81,17 @@ if df is not None:
 
 else:
     st.error("No se pudieron cargar los datos de Kraken. Verifica tu conexión.")
+
+# 4. Bucle de actualización automática en segundo plano (cada 60 segundos)
+st.markdown("---")
+st.write("🔄 Bot operando con ciclo automático...")
+
+TIEMPO_ESPERA = 60  
+placeholder = st.empty()
+
+for segundos_restantes in range(TIEMPO_ESPERA, 0, -1):
+    placeholder.text(f"Próxima actualización de mercado en {segundos_restantes} segundos...")
+    time.sleep(1)
+
+# Reinicia el script automáticamente al terminar el conteo
+st.rerun()
