@@ -1,4 +1,3 @@
-import time
 import streamlit as st
 import plotly.graph_objects as go
 from data_engine import obtener_datos
@@ -6,19 +5,23 @@ from risk_manager import calcular_tamano_posicion
 from execution_engine import ejecutar_orden_real, obtener_conexion_kraken
 
 # Configuración de la página web
-st.set_page_config(page_title="Kraken Multi-Currency Bot", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="Kraken ADA Manual/Auto Bot", page_icon="🤖", layout="wide")
 
-st.title("🤖 Kraken Multi-Currency Trading Bot - Panel Autónomo en Tiempo Real")
-st.markdown("Monitoreo, ejecución automática y reportes sincronizados con tu cuenta de Kraken.")
+st.title("🤖 Kraken Trading Bot - Control Manual por Botón")
+st.markdown("Ejecución precisa de la estrategia Dual-EMA bajo tu comando directo.")
 
-# --- BARRA LATERAL: SELECCIÓN DE DIVISAS ---
-st.sidebar.header("⚙️ Configuración de Pares")
+# --- BARRA LATERAL: CONFIGURACIÓN ---
+st.sidebar.header("⚙️ Configuración de Operación")
 pares_disponibles = [
-    'BTC/USD', 'ETH/USD', 'SOL/USD', 'ADA/USD', 
-    'XRP/USD', 'DOT/USD', 'MATIC/USD', 'LINK/USD', 
-    'AVAX/USD', 'LTC/USD', 'BCH/USD', 'UNI/USD'
+    'ADA/USD', 'BTC/USD', 'ETH/USD', 'SOL/USD', 
+    'XRP/USD', 'DOT/USD', 'LTC/USD', 'BCH/USD'
 ]
-simbolo_seleccionado = st.sidebar.selectbox("Selecciona la divisa a operar:", pares_disponibles)
+# Seleccionamos por defecto ADA/USD como pediste
+indice_ada = pares_disponibles.index('ADA/USD') if 'ADA/USD' in pares_disponibles else 0
+simbolo_seleccionado = st.sidebar.selectbox("Selecciona la divisa a operar:", pares_disponibles, index=indice_ada)
+
+if st.button("🔄 Actualizar Datos y Reportes"):
+    st.rerun()
 
 # 1. Obtener datos del motor para el par seleccionado
 with st.spinner(f"Conectando con Kraken y descargando datos para {simbolo_seleccionado}..."):
@@ -36,7 +39,7 @@ if df is not None and not df.empty:
     if precio_actual > ema_200:
         col3.metric("Estado del Mercado", "TENDENCIA ALCISTA", "LONG HABILITADO", delta_color="normal")
     else:
-        col3.metric("Estado del Mercado", "TENDENCIA BAJISTA", "FUERA DE MERCADO", delta_color="inverse")
+        col3.metric("Estado del Mercado", "TENDENCIA BAJISTA", "PRECAUCIÓN", delta_color="inverse")
 
     st.markdown("---")
 
@@ -55,18 +58,19 @@ if df is not None and not df.empty:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # 3. Panel de Gestión de Riesgo y Piloto Automático
+    # 3. Panel de Gestión de Riesgo y Control por Botón
     st.markdown("---")
-    st.subheader("🛡️ Gestión de Riesgo y Piloto Automático")
+    st.subheader("🛡️ Gestión de Capital y Control de Ejecución")
     
     col_a, col_b = st.columns(2)
     with col_a:
-        capital_cuenta = st.number_input("Capital de la Cuenta (USD)", value=8.0, step=1.0)
-        porcentaje_riesgo = st.slider("Porcentaje de Riesgo por Trade", min_value=0.01, max_value=1.0, value=0.50, step=0.05, format="%.2f")
+        # Seteamos por defecto tu saldo real actual de 19.80 USD
+        capital_cuenta = st.number_input("Capital Disponible (USD)", value=19.80, step=1.0)
+        porcentaje_riesgo = st.slider("Porcentaje de Capital a Usar en el Trade", min_value=0.10, max_value=1.00, value=0.90, step=0.05, format="%.2f")
     
     with col_b:
         stop_loss_sugerido = precio_actual * 0.98 
-        precio_sl_personalizado = st.number_input("Precio de Stop Loss", value=float(stop_loss_sugerido), step=0.01)
+        precio_sl_personalizado = st.number_input("Precio de Stop Loss", value=float(stop_loss_sugerido), step=0.001)
 
     resultado_riesgo = calcular_tamano_posicion(
         capital_total=capital_cuenta,
@@ -78,44 +82,58 @@ if df is not None and not df.empty:
     if resultado_riesgo:
         r1, r2, r3 = st.columns(3)
         r1.metric("Riesgo Máximo en Dinero", f"${resultado_riesgo['riesgo_dinero']:,.2f}")
-        r2.metric("Tamaño de Posición", f"{resultado_riesgo['tamaño_btc']:.5f} Unidades")
+        r2.metric("Tamaño de Posición (ADA)", f"{resultado_riesgo['tamaño_btc']:.2f} Unidades")
         r3.metric("Capital Involucrado", f"${resultado_riesgo['capital_involucrado']:,.2f}")
 
         st.markdown("---")
-        st.subheader("⚡ Estado del Piloto Automático y Ejecución")
+        st.subheader("⚡ Interruptor de Ejecución Manual")
+        
+        # Inicializamos el estado del botón en la sesión de Streamlit si no existe
+        if 'bot_activado' not in st.session_state:
+            st.session_state.bot_activado = False
 
-        if precio_actual > ema_200:
-            st.success(f"🤖 **Piloto Automático Activo:** {simbolo_seleccionado} en Tendencia Alcista. Enviando orden a Kraken...")
+        # Botón de activación tipo interruptor
+        if st.button("🟢 ENCENDER / EJECUTAR ORDEN AHORA" if not st.session_state.bot_activado else "🔴 APAGAR / BOT ACTIVO"):
+            st.session_state.bot_activado = not st.session_state.bot_activado
+            st.rerun()
+
+        if st.session_state.bot_activado:
+            st.warning("⚠️ **¡Interruptor Activado!** Validando y enviando orden real a Kraken...")
             
-            respuesta_orden = ejecutar_orden_real(
-                simbolo=simbolo_seleccionado,
-                tipo_operacion="BUY",
-                tamaño_btc=resultado_riesgo['tamaño_btc']
-            )
-            
-            if not respuesta_orden or "error" in respuesta_orden:
-                error_msg = respuesta_orden.get('error', 'Error desconocido') if respuesta_orden else 'Respuesta vacía'
-                st.error(f"Aviso de ejecución: {error_msg}")
+            # Verificamos si el precio cumple la condición de la estrategia antes de mandar la orden
+            if precio_actual > ema_200:
+                respuesta_orden = ejecutar_orden_real(
+                    simbolo=simbolo_seleccionado,
+                    tipo_operacion="BUY",
+                    tamaño_btc=resultado_riesgo['tamaño_btc']
+                )
+                
+                if not respuesta_orden or "error" in respuesta_orden:
+                    error_msg = respuesta_orden.get('error', 'Error desconocido') if respuesta_orden else 'Respuesta vacía'
+                    st.error(f"Kraken rechazó la orden: {error_msg}")
+                else:
+                    st.success(f"¡Orden de compra ejecutada con éxito en Kraken! ID: {respuesta_orden.get('id', 'N/A')}")
             else:
-                st.info(f"¡Orden procesada en Kraken! ID: {respuesta_orden.get('id', 'N/A')}")
+                st.error("❌ El bot no ejecutó la orden porque el precio actual está por debajo de la EMA 200 (Condición bajista).")
+            
+            # Apagamos el interruptor tras el intento para evitar bucles de doble ejecución
+            st.session_state.bot_activado = False
         else:
-            st.warning(f"🛡️ **Piloto Automático en Espera:** {simbolo_seleccionado} está en tendencia bajista.")
+            st.info("🔒 **El bot está en reposo.** Presiona el botón verde cuando desees enviar la orden de compra al mercado.")
 
 else:
     st.error(f"No se pudieron cargar los datos de Kraken para {simbolo_seleccionado}.")
 
-# --- REPORTES EN TIEMPO REAL (SE ACTUALIZAN SOLO CADA CICLO) ---
+# --- REPORTES DESDE KRAKEN ---
 st.markdown("---")
-st.subheader("📊 Reporte en Vivo desde los Servidores de Kraken")
+st.subheader("📊 Reporte de Cuenta en Kraken")
 
-with st.spinner("Sincronizando balance y órdenes en tiempo real..."):
+with st.spinner("Consultando estado actual en Kraken..."):
     exchange_conn = obtener_conexion_kraken()
     if exchange_conn:
         try:
-            # Consultar balance real de la cuenta
             balance = exchange_conn.fetch_balance()
-            st.write("### 💰 Balance Actual de la Cuenta")
-            
+            st.write("### 💰 Balance Disponible")
             total_free = balance.get('free', {})
             monedas_con_fondos = {k: v for k, v in total_free.items() if v > 0}
             
@@ -124,8 +142,7 @@ with st.spinner("Sincronizando balance y órdenes en tiempo real..."):
             else:
                 st.info("No se encontraron balances positivos disponibles.")
 
-            # Consultar órdenes abiertas actuales
-            st.write("### 📋 Órdenes Abiertas Actualmente")
+            st.write("### 📋 Órdenes Abiertas")
             ordenes_abiertas = exchange_conn.fetch_open_orders(simbolo_seleccionado)
             if ordenes_abiertas:
                 for o in ordenes_abiertas:
@@ -133,29 +150,15 @@ with st.spinner("Sincronizando balance y órdenes en tiempo real..."):
             else:
                 st.info("No hay órdenes abiertas en este momento para este par.")
 
-            # Consultar historial de órdenes cerradas
-            st.write("### 📜 Historial de Órdenes Recientes")
+            st.write("### 📜 Historial Reciente")
             ordenes_cerradas = exchange_conn.fetch_closed_orders(simbolo_seleccionado, limit=5)
             if ordenes_cerradas:
                 for o in ordenes_cerradas:
                     st.text(f"ID: {o.get('id')} | Lado: {o.get('side')} | Precio Ejecutado: {o.get('price')} | Estado: {o.get('status')}")
             else:
-                st.info("No hay registros recientes de órdenes cerradas para este par.")
+                st.info("No hay registros recientes de órdenes cerradas.")
 
         except Exception as e:
-            st.error(f"No se pudo sincronizar el reporte con Kraken: {e}")
+            st.error(f"Error al conectar con Kraken para el reporte: {e}")
     else:
         st.error("Error de autenticación con Kraken. Revisa tus Secrets.")
-
-# 4. Bucle de actualización automática en tiempo real (cada 60 segundos)
-st.markdown("---")
-st.write(f"🔄 Bot operando de forma autónoma sobre {simbolo_seleccionado}...")
-
-TIEMPO_ESPERA = 60  
-placeholder = st.empty()
-
-for segundos_restantes in range(TIEMPO_ESPERA, 0, -1):
-    placeholder.text(f"Próxima revisión de mercado y actualización de balance en {segundos_restantes} segundos...")
-    time.sleep(1)
-
-st.rerun()
