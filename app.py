@@ -8,8 +8,8 @@ from execution_engine import ejecutar_orden_real, obtener_conexion_kraken
 # Configuración de la página web
 st.set_page_config(page_title="Kraken Multi-Currency Bot", page_icon="🤖", layout="wide")
 
-st.title("🤖 Kraken Multi-Currency Trading Bot - Panel Autónomo")
-st.markdown("Monitoreo, ejecución automática y reportes de la estrategia Dual-EMA.")
+st.title("🤖 Kraken Multi-Currency Trading Bot - Panel Autónomo en Tiempo Real")
+st.markdown("Monitoreo, ejecución automática y reportes sincronizados con tu cuenta de Kraken.")
 
 # --- BARRA LATERAL: SELECCIÓN DE DIVISAS ---
 st.sidebar.header("⚙️ Configuración de Pares")
@@ -19,9 +19,6 @@ pares_disponibles = [
     'AVAX/USD', 'LTC/USD', 'BCH/USD', 'UNI/USD'
 ]
 simbolo_seleccionado = st.sidebar.selectbox("Selecciona la divisa a operar:", pares_disponibles)
-
-if st.button("🔄 Actualizar Datos del Mercado"):
-    st.rerun()
 
 # 1. Obtener datos del motor para el par seleccionado
 with st.spinner(f"Conectando con Kraken y descargando datos para {simbolo_seleccionado}..."):
@@ -64,7 +61,7 @@ if df is not None and not df.empty:
     
     col_a, col_b = st.columns(2)
     with col_a:
-        capital_cuenta = st.number_input("Capital de la Cuenta (USD)", value=20.0, step=5.0)
+        capital_cuenta = st.number_input("Capital de la Cuenta (USD)", value=8.0, step=1.0)
         porcentaje_riesgo = st.slider("Porcentaje de Riesgo por Trade", min_value=0.01, max_value=1.0, value=0.50, step=0.05, format="%.2f")
     
     with col_b:
@@ -107,51 +104,50 @@ if df is not None and not df.empty:
 else:
     st.error(f"No se pudieron cargar los datos de Kraken para {simbolo_seleccionado}.")
 
-# --- REPORTES Y BALANCE DIRECTO DE KRAKEN ---
+# --- REPORTES EN TIEMPO REAL (SE ACTUALIZAN SOLO CADA CICLO) ---
 st.markdown("---")
-st.subheader("📊 Reportes y Estado de Operaciones en Kraken")
+st.subheader("📊 Reporte en Vivo desde los Servidores de Kraken")
 
-if st.button("📥 Consultar Balance y Órdenes Abiertas en Kraken"):
-    with st.spinner("Conectando con los servidores de Kraken para extraer el reporte..."):
-        exchange_conn = obtener_conexion_kraken()
-        if exchange_conn:
-            try:
-                # Consultar balance real de la cuenta
-                balance = exchange_conn.fetch_balance()
-                st.write("### 💰 Balance de la Cuenta")
-                
-                total_free = balance.get('free', {})
-                monedas_con_fondos = {k: v for k, v in total_free.items() if v > 0}
-                
-                if monedas_con_fondos:
-                    st.json(monedas_con_fondos)
-                else:
-                    st.info("No se encontraron balances positivos disponibles.")
+with st.spinner("Sincronizando balance y órdenes en tiempo real..."):
+    exchange_conn = obtener_conexion_kraken()
+    if exchange_conn:
+        try:
+            # Consultar balance real de la cuenta
+            balance = exchange_conn.fetch_balance()
+            st.write("### 💰 Balance Actual de la Cuenta")
+            
+            total_free = balance.get('free', {})
+            monedas_con_fondos = {k: v for k, v in total_free.items() if v > 0}
+            
+            if monedas_con_fondos:
+                st.json(monedas_con_fondos)
+            else:
+                st.info("No se encontraron balances positivos disponibles.")
 
-                # Consultar órdenes abiertas actuales
-                st.write("### 📋 Órdenes Abiertas Actualmente")
-                ordenes_abiertas = exchange_conn.fetch_open_orders(simbolo_seleccionado)
-                if ordenes_abiertas:
-                    for o in ordenes_abiertas:
-                        st.text(f"ID: {o.get('id')} | Lado: {o.get('side')} | Precio: {o.get('price')} | Estado: {o.get('status')}")
-                else:
-                    st.info("No hay órdenes abiertas en este momento para este par.")
+            # Consultar órdenes abiertas actuales
+            st.write("### 📋 Órdenes Abiertas Actualmente")
+            ordenes_abiertas = exchange_conn.fetch_open_orders(simbolo_seleccionado)
+            if ordenes_abiertas:
+                for o in ordenes_abiertas:
+                    st.text(f"ID: {o.get('id')} | Lado: {o.get('side')} | Precio: {o.get('price')} | Estado: {o.get('status')}")
+            else:
+                st.info("No hay órdenes abiertas en este momento para este par.")
 
-                # Consultar historial de órdenes cerradas
-                st.write("### 📜 Historial de Órdenes Cerradas")
-                ordenes_cerradas = exchange_conn.fetch_closed_orders(simbolo_seleccionado, limit=5)
-                if ordenes_cerradas:
-                    for o in ordenes_cerradas:
-                        st.text(f"ID: {o.get('id')} | Lado: {o.get('side')} | Precio Ejecutado: {o.get('price')} | Estado: {o.get('status')}")
-                else:
-                    st.info("No hay registros recientes de órdenes cerradas para este par.")
+            # Consultar historial de órdenes cerradas
+            st.write("### 📜 Historial de Órdenes Recientes")
+            ordenes_cerradas = exchange_conn.fetch_closed_orders(simbolo_seleccionado, limit=5)
+            if ordenes_cerradas:
+                for o in ordenes_cerradas:
+                    st.text(f"ID: {o.get('id')} | Lado: {o.get('side')} | Precio Ejecutado: {o.get('price')} | Estado: {o.get('status')}")
+            else:
+                st.info("No hay registros recientes de órdenes cerradas para este par.")
 
-            except Exception as e:
-                st.error(f"No se pudo obtener el reporte de Kraken: {e}")
-        else:
-            st.error("Error de autenticación con Kraken. Revisa tus Secrets.")
+        except Exception as e:
+            st.error(f"No se pudo sincronizar el reporte con Kraken: {e}")
+    else:
+        st.error("Error de autenticación con Kraken. Revisa tus Secrets.")
 
-# 4. Bucle de actualización automática
+# 4. Bucle de actualización automática en tiempo real (cada 60 segundos)
 st.markdown("---")
 st.write(f"🔄 Bot operando de forma autónoma sobre {simbolo_seleccionado}...")
 
@@ -159,7 +155,7 @@ TIEMPO_ESPERA = 60
 placeholder = st.empty()
 
 for segundos_restantes in range(TIEMPO_ESPERA, 0, -1):
-    placeholder.text(f"Próxima revisión de mercado en {segundos_restantes} segundos...")
+    placeholder.text(f"Próxima revisión de mercado y actualización de balance en {segundos_restantes} segundos...")
     time.sleep(1)
 
 st.rerun()
